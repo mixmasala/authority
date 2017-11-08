@@ -23,6 +23,8 @@ import (
 
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/pki"
+	"github.com/katzenpost/core/sphinx/constants"
+	"github.com/katzenpost/core/utils"
 	"gopkg.in/square/go-jose.v2"
 )
 
@@ -78,7 +80,7 @@ func signDescriptor(signingKey *eddsa.PrivateKey, base *pki.MixDescriptor) (stri
 	return signed.CompactSerialize()
 }
 
-func verifyAndParseDescriptor(epoch uint64, b []byte) (*pki.MixDescriptor, error) {
+func verifyAndParseDescriptor(b []byte, epoch uint64) (*pki.MixDescriptor, error) {
 	signed, err := jose.ParseSigned(string(b))
 	if err != nil {
 		return nil, err
@@ -126,15 +128,9 @@ func verifyAndParseDescriptor(epoch uint64, b []byte) (*pki.MixDescriptor, error
 	if d.Version != nodeDescriptorVersion {
 		return nil, fmt.Errorf("nonvoting: Invalid Descriptor Version: '%v'", d.Version)
 	}
-	if d.LinkKey == nil {
-		return nil, fmt.Errorf("nonvoting: Descriptor missing 'LinkKey'")
+	if err = isDescriptorWellFormed(&d.MixDescriptor, epoch); err != nil {
+		return nil, err
 	}
-	if d.IdentityKey == nil {
-		return nil, fmt.Errorf("nonvoting: Descriptor missing 'IdentityKey'")
-	}
-	// XXX: Addresses
-	// XXX: Layer
-	// XXX: MixKeys (Use `epoch`).
 
 	// And as the final check, ensure that the key embedded in the descriptor
 	// matches the key embedded in the JOSE header, that we used to validate
@@ -146,4 +142,40 @@ func verifyAndParseDescriptor(epoch uint64, b []byte) (*pki.MixDescriptor, error
 		return nil, fmt.Errorf("nonvoting: Descriptor signing key mismatch")
 	}
 	return &d.MixDescriptor, nil
+}
+
+func isDescriptorWellFormed(d *pki.MixDescriptor, epoch uint64) error {
+	if d.Name == "" {
+		return fmt.Errorf("nonvoting: Descriptor missing Name")
+	}
+	if len(d.Name) > constants.NodeIDLength {
+		return fmt.Errorf("nonvoting: Descriptor Name '%v' exceeds max length", d.Name)
+	}
+	if d.LinkKey == nil {
+		return fmt.Errorf("nonvoting: Descriptor missing LinkKey")
+	}
+	if d.IdentityKey == nil {
+		return fmt.Errorf("nonvoting: Descriptor missing IdentityKey")
+	}
+	if d.MixKeys[epoch] == nil {
+		return fmt.Errorf("nonvoting: Descriptor missing MixKey[%v]", epoch)
+	}
+	for e := range d.MixKeys {
+		// TODO: Should this check that the epochs in MixKey are sequential?
+		if e < epoch || e > epoch+3 {
+			return fmt.Errorf("nonvoting: Descriptor contains MixKey for invalid epoch: %v", d)
+		}
+	}
+	if len(d.Addresses) == 0 {
+		return fmt.Errorf("nonvoting: Descriptor missing Addresses")
+	}
+	for _, v := range d.Addresses {
+		if err := utils.EnsureAddrIPPort(v); err != nil {
+			return fmt.Errorf("nonvoting: Descriptor containx invalid Address '%v': %v", v, err)
+		}
+	}
+	if d.Layer != pki.LayerProvider && d.Layer != 0 {
+		return fmt.Errorf("nonvoting: Descriptor self-assigned Layer: '%v'", d.Layer)
+	}
+	return nil
 }
