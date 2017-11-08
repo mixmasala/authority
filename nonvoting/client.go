@@ -45,6 +45,10 @@ func (cfg *ClientConfig) validate() error {
 		return fmt.Errorf("nonvoting/client: LogBackend is mandatory")
 	}
 	if _, _, err := net.SplitHostPort(cfg.Address); err != nil {
+		// TODO: Somewhat sloppy, but the config file parser handes this
+		// for us, at least for the server.  There's nothing wrong with
+		// the host here being a FQDN or something in theory, so maybe
+		// this is enough.
 		return fmt.Errorf("nonvoting/client: Invalid Address: %v", err)
 	}
 	if cfg.PublicKey == nil {
@@ -60,11 +64,28 @@ type client struct {
 
 func (c *client) Post(ctx context.Context, epoch uint64, signingKey *eddsa.PrivateKey, d *pki.MixDescriptor) error {
 	c.log.Debugf("Post(ctx, %d, %v, d)", epoch, signingKey.PublicKey())
+
+	// XXX: Ensure that the descriptor we are about to post is well formed.
+
+	// Make a serialized + signed + serialized descriptor.
+	signed, err := signDescriptor(signingKey, d)
+	if err != nil {
+		return err
+	}
+	c.log.Debugf("Signed descriptor: '%v'", signed)
+
+	// Post it to the right place.
+
 	return fmt.Errorf("nonvoting/client: Post() is unimplemented")
 }
 
 func (c *client) Get(ctx context.Context, epoch uint64) (*pki.Document, error) {
 	c.log.Debugf("Get(ctx, %d)", epoch)
+
+	// Download the descriptor.
+
+	// Validate the descriptor.
+
 	return nil, fmt.Errorf("nonvoting/client: Get() is unimplemented")
 }
 
