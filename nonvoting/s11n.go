@@ -120,7 +120,7 @@ func verifyAndParseDescriptor(b []byte, epoch uint64) (*pki.MixDescriptor, error
 	}
 
 	// And as the final check, ensure that the key embedded in the descriptor
-	// matches the key embedded in the JOSE header, that we used to validate
+	// matches the key we teased out of the payload, that we used to validate
 	// the signature.
 	//
 	// MixDescriptors returned from this function are essentially known to be
