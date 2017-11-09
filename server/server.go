@@ -22,16 +22,40 @@ type Storage interface {
 	GetDirectory(epoch int64) (*pki.Document, error)
 }
 
-type Config struct {
-	// BaseURL in the URL prefix
-	// (must not end in /)
-	BaseURL string
-	// DataDir is the filepath where
-	// this server stores directory and consensus files
-	DataDir string
+// DirectoryDescriptor describe another Directory Authority server
+type DirectoryDescriptor struct {
+	// IdentityKey is the Directory Authority server's identity (signing) key.
+	IdentityKey *eddsa.PublicKey
+
 	// NetAddr is a network address string
 	// e.g. "127.0.0.1:8080"
 	NetAddr string
+
+	// BaseURL in the URL prefix
+	// (must not end in /)
+	BaseURL string
+}
+
+// Config is the configuration struct for the Directory Authority server instance
+type Config struct {
+	// IdentityKey is the Directory Authority server's identity (signing) key.
+	IdentityKey *eddsa.PublicKey
+
+	// NetAddr is a network address string
+	// e.g. "127.0.0.1:8080"
+	NetAddr string
+
+	// BaseURL in the URL prefix
+	// (must not end in /)
+	BaseURL string
+
+	// DataDir is the filepath where
+	// this server stores directory and consensus files
+	DataDir string
+
+	// Peers is our set of peer directory authority servers
+	// which we will vote amongst.
+	Peers []DirectoryDescriptor
 }
 
 // Server implements our Directory Authority mix network
