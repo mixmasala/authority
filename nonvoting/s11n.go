@@ -18,6 +18,7 @@ package nonvoting
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -28,10 +29,7 @@ import (
 	"gopkg.in/square/go-jose.v2"
 )
 
-const (
-	nodeDescriptorVersion = "nonvoting-v0"
-	nodeJosePubKeyHdr     = "EdDSAPublicKey"
-)
+const nodeDescriptorVersion = "nonvoting-v0"
 
 type nodeDescriptor struct {
 	// Version uniquely identifies the descriptor format as being for the
@@ -54,20 +52,11 @@ func signDescriptor(signingKey *eddsa.PrivateKey, base *pki.MixDescriptor) (stri
 	}
 
 	// Sign the descriptor.
-	//
-	// HACK: Frustratingly enough, the library doesn't appear to support
-	// embedding JWKs for EdDSA signatures, so just jam the public key into
-	// the header.
 	k := jose.SigningKey{
 		Algorithm: jose.EdDSA,
 		Key:       *signingKey.InternalPtr(),
 	}
-	sOpts := &jose.SignerOptions{
-		ExtraHeaders: map[jose.HeaderKey]interface{}{
-			nodeJosePubKeyHdr: signingKey.PublicKey(),
-		},
-	}
-	signer, err := jose.NewSigner(k, sOpts)
+	signer, err := jose.NewSigner(k, nil)
 	if err != nil {
 		return "", err
 	}
@@ -86,12 +75,18 @@ func verifyAndParseDescriptor(b []byte, epoch uint64) (*pki.MixDescriptor, error
 		return nil, err
 	}
 
-	// The descriptor should be signed by it's own key, but the library
-	// doesn't give a convenient way to extract the payload when it hasn't
-	// been verified, so reach into the header instead.
+	// So the descriptor is going to be signed by the node's key, which may
+	// be new to the authority (which is doing the decoding).   In an ideal
+	// world this is where embedding the public key in the header solves this
+	// problem, but the library doesn't support doing so for EdDSA signatures.
 	//
-	// HACK: This should be an embedded JWK, but it's just Base64 encoded
-	// into the JWS Header because of library limitations.
+	// Since the descriptors themselves include (perhaps redundantly) a copy
+	// of the IdentityKey used to sign the descriptor, we can reach into
+	// the unverified payload to pull it out instead.
+	//
+	// This is wasteful on the CPU side since it's de-serializing the payload
+	// twice, but this isn't a critical path operation, nor is the non-voting
+	// authority something that will do this a lot.
 	if len(signed.Signatures) != 1 {
 		return nil, fmt.Errorf("nonvoting: Expected 1 signature, got: %v", len(signed.Signatures))
 	}
@@ -99,16 +94,8 @@ func verifyAndParseDescriptor(b []byte, epoch uint64) (*pki.MixDescriptor, error
 	if alg != "EdDSA" {
 		return nil, fmt.Errorf("nonvoting: Unsupported signature algorithm: '%v'", alg)
 	}
-	s, ok := signed.Signatures[0].Header.ExtraHeaders[nodeJosePubKeyHdr]
-	if !ok {
-		return nil, fmt.Errorf("nonvoting: Failed to find descriptor public key")
-	}
-	var candidatePk eddsa.PublicKey
-	pkStr, ok := s.(string)
-	if !ok {
-		return nil, fmt.Errorf("nonvoting: Pathologically malfored descriptor public key")
-	}
-	if err = candidatePk.UnmarshalText([]byte(pkStr)); err != nil {
+	candidatePk, err := extractSignedDescriptorPublicKey(b)
+	if err != nil {
 		return nil, err
 	}
 
@@ -142,6 +129,39 @@ func verifyAndParseDescriptor(b []byte, epoch uint64) (*pki.MixDescriptor, error
 		return nil, fmt.Errorf("nonvoting: Descriptor signing key mismatch")
 	}
 	return &d.MixDescriptor, nil
+}
+
+func extractSignedDescriptorPublicKey(b []byte) (*eddsa.PublicKey, error) {
+	// Per RFC 7515:
+	//
+	// In the JWS Compact Serialization, a JWS is represented as the
+	// concatenation:
+	//
+	//   BASE64URL(UTF8(JWS Protected Header)) || '.' ||
+	//   BASE64URL(JWS Payload) || '.' ||
+	//   BASE64URL(JWS Signature)
+	//
+	// The JOSE library used doesn't support embedding EdDSA JWK Public Keys
+	// so this reaches into the (unverified) payload, to pull out the
+	// descriptor's PublicKey.
+
+	spl := bytes.Split(b, []byte{'.'})
+	if len(spl) != 3 {
+		return nil, fmt.Errorf("nonvoting: Splitting at '.' returned unexpected number of sections: %v", len(spl))
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(string(spl[1]))
+	if err != nil {
+		return nil, fmt.Errorf("nonvoting: (Early) Failed to decode: %v", err)
+	}
+	d := new(nodeDescriptor)
+	if err = json.Unmarshal(payload, d); err != nil {
+		return nil, fmt.Errorf("nonvoting: (Early) Failed to deserialize: %v", err)
+	}
+	candidatePk := d.IdentityKey
+	if candidatePk == nil {
+		return nil, fmt.Errorf("nonvoting: (Early) Descriptor missing IdentityKey")
+	}
+	return candidatePk, nil
 }
 
 func isDescriptorWellFormed(d *pki.MixDescriptor, epoch uint64) error {
