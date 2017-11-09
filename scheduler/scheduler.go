@@ -1,8 +1,8 @@
 package authority
 
 import (
-	"time"
 	"context"
+	"time"
 
 	"github.com/katzenpost/authority"
 	"github.com/katzenpost/core/epochtime"
@@ -12,13 +12,13 @@ import (
 
 const (
 	tilExchange = 120 * time.Minute
-	tilTabulate = 150 * time.Minute
+	tilTabulate = (127 * time.Minute) + (30 * time.Second)
 )
 
 type EpochScheduler struct {
 	ctx context.Context
-	c  clockwork.Clock
-	et *epochtime.Clock
+	c   clockwork.Clock
+	et  *epochtime.Clock
 }
 
 func NewEpochScheduler(ctx context.Context, c clockwork.Clock) *EpochScheduler {
