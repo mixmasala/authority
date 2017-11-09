@@ -17,15 +17,29 @@
 package nonvoting
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/log"
 	"github.com/katzenpost/core/pki"
 	"github.com/katzenpost/core/utils"
 	"github.com/op/go-logging"
+	"golang.org/x/net/context/ctxhttp"
 )
+
+const (
+	v0postBase    = "v0/post/"
+	v0getBase     = "v0/get/"
+	joseMimeType  = "application/jose"
+	clientTimeout = 30 * time.Second
+)
+
+var httpClient = &http.Client{Timeout: clientTimeout}
 
 // ClientConfig is a nonvoting authority pki.Client instance.
 type ClientConfig struct {
@@ -74,14 +88,44 @@ func (c *client) Post(ctx context.Context, epoch uint64, signingKey *eddsa.Priva
 	c.log.Debugf("Signed descriptor: '%v'", signed)
 
 	// Post it to the right place.
+	u := postURLForEpoch(c.cfg.Address, epoch)
+	c.log.Debugf("Posting descriptor to: %v", u)
 
-	return fmt.Errorf("nonvoting/client: Post() is unimplemented")
+	r := bytes.NewReader([]byte(signed))
+	resp, err := ctxhttp.Post(ctx, httpClient, u, joseMimeType, r)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusCreated, http.StatusAccepted, http.StatusNoContent, http.StatusNotModified:
+		return nil
+	default:
+		// TODO: The authority rejected the POST for some reason, the
+		// right thing to do is to probably return an error indicating
+		// that the server should give up trying to upload a descriptor
+		// for this epoch.
+		//
+		// See: https://github.com/Katzenpost/server/issues/11
+		return fmt.Errorf("nonvoting/client: Post() rejected by authority: ", err)
+	}
+
+	// NOTREACHED
 }
 
 func (c *client) Get(ctx context.Context, epoch uint64) (*pki.Document, error) {
 	c.log.Debugf("Get(ctx, %d)", epoch)
 
 	// Download the document.
+	u := getURLForEpoch(c.cfg.Address, epoch)
+	c.log.Debugf("Getting document from: %v", u)
+
+	resp, err := ctxhttp.Get(ctx, httpClient, u)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
 	// Validate the document.
 
@@ -102,4 +146,22 @@ func NewClient(cfg *ClientConfig) (pki.Client, error) {
 	c.log = cfg.LogBackend.GetLogger("pki/nonvoting/client")
 
 	return c, nil
+}
+
+func postURLForEpoch(addr string, epoch uint64) string {
+	u := &url.URL{
+		Scheme: "http",
+		Host:   addr,
+		Path:   fmt.Sprintf("%v%v", v0postBase, epoch),
+	}
+	return u.String()
+}
+
+func getURLForEpoch(addr string, epoch uint64) string {
+	u := &url.URL{
+		Scheme: "http",
+		Host:   addr,
+		Path:   fmt.Sprintf("%v%v", v0getBase, epoch),
+	}
+	return u.String()
 }
