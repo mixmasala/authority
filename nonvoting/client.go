@@ -108,7 +108,7 @@ func (c *client) Post(ctx context.Context, epoch uint64, signingKey *eddsa.Priva
 		// for this epoch.
 		//
 		// See: https://github.com/Katzenpost/server/issues/11
-		return fmt.Errorf("nonvoting/client: Post() rejected by authority: ", err)
+		return fmt.Errorf("nonvoting/client: Post() rejected by authority: %v", resp.StatusCode)
 	}
 
 	// NOTREACHED
