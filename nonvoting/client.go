@@ -59,7 +59,7 @@ type client struct {
 }
 
 func (c *client) Post(ctx context.Context, epoch uint64, signingKey *eddsa.PrivateKey, d *pki.MixDescriptor) error {
-	c.log.Debugf("Post(ctx, %d, %v, d)", epoch, signingKey.PublicKey())
+	c.log.Debugf("Post(ctx, %d, %v, %v)", epoch, signingKey.PublicKey(), d)
 
 	// Ensure that the descriptor we are about to post is well formed.
 	if err := isDescriptorWellFormed(d, epoch); err != nil {

@@ -182,7 +182,7 @@ func isDescriptorWellFormed(d *pki.MixDescriptor, epoch uint64) error {
 	}
 	for e := range d.MixKeys {
 		// TODO: Should this check that the epochs in MixKey are sequential?
-		if e < epoch || e > epoch+3 {
+		if e < epoch || e >= epoch+3 {
 			return fmt.Errorf("nonvoting: Descriptor contains MixKey for invalid epoch: %v", d)
 		}
 	}
