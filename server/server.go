@@ -7,15 +7,6 @@ import (
 	"net/http"
 )
 
-type StateMachine interface {
-	SetState()
-	Advance()
-}
-
-type Scheduler interface {
-	Get()
-}
-
 type MixServer interface {
 	PutDescriptor(descriptor *pki.MixDescriptor) error
 	GetConsensus(epoch int64) (*pki.Document, error)
