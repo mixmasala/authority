@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/katzenpost/core/pki"
 	"net/http"
+
+	"github.com/katzenpost/core/crypto/eddsa"
+	"github.com/katzenpost/core/pki"
 )
 
 type MixServer interface {
