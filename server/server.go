@@ -1,11 +1,33 @@
-package main
+// server.go - Katzenpost Directory Authority server API
+// Copyright (C) 2017  David Stainton.
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package config provides the Katzenpost Directory Authority server API
+package server
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 
-	"github.com/katzenpost/core/crypto/eddsa"
+	"github.com/jonboulle/clockwork"
+	"github.com/katzenpost/authority/config"
+	"github.com/katzenpost/authority/scheduler"
+	"github.com/katzenpost/authority/statemachine"
+	"github.com/katzenpost/core/epochtime"
 	"github.com/katzenpost/core/pki"
 )
 
@@ -24,46 +46,13 @@ type Storage interface {
 	GetDirectory(epoch int64) (*pki.Document, error)
 }
 
-// DirectoryDescriptor describe another Directory Authority server
-type DirectoryDescriptor struct {
-	// IdentityKey is the Directory Authority server's identity (signing) key.
-	IdentityKey *eddsa.PublicKey
-
-	// NetAddr is a network address string
-	// e.g. "127.0.0.1:8080"
-	NetAddr string
-
-	// BaseURL in the URL prefix
-	// (must not end in /)
-	BaseURL string
-}
-
-// Config is the configuration struct for the Directory Authority server instance
-type Config struct {
-	// IdentityKey is the Directory Authority server's identity (signing) key.
-	IdentityKey *eddsa.PublicKey
-
-	// NetAddr is a network address string
-	// e.g. "127.0.0.1:8080"
-	NetAddr string
-
-	// BaseURL in the URL prefix
-	// (must not end in /)
-	BaseURL string
-
-	// DataDir is the filepath where
-	// this server stores directory and consensus files
-	DataDir string
-
-	// Peers is our set of peer directory authority servers
-	// which we will vote amongst.
-	Peers []DirectoryDescriptor
-}
-
 // Server implements our Directory Authority mix network
 // consensus document service.
 type Server struct {
-	config *Config
+	config       *config.Config
+	scheduler    *scheduler.EpochScheduler
+	statemachine statemachine.StateMachine
+	clock        clockwork.Clock
 }
 
 // consensusHandler handles requests for consensus documents
@@ -81,25 +70,35 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("output", string(buf.Bytes()))
 }
 
-func (s *Server) Start() {
+func (s *Server) VoteExchangeHandler() {
+	fmt.Println("vote phase")
+}
+
+func (s *Server) SignatureExchangeHandler() {
+	fmt.Println("signature exchange phase")
+}
+
+func (s *Server) Start() error {
+	var err error
+	t := epochtime.New(s.clock)
+	_, elapsed, _ := t.Now()
+	s.statemachine, err = statemachine.New(elapsed, s.VoteExchangeHandler, s.SignatureExchangeHandler)
+	if err != nil {
+		return err
+	}
+	go s.scheduler.Run(s.statemachine)
 	http.HandleFunc(fmt.Sprintf("%s/upload/", s.config.BaseURL), uploadHandler)
 	http.HandleFunc(fmt.Sprintf("%s/consensus/", s.config.BaseURL), consensusHandler)
-	http.ListenAndServe(s.config.NetAddr, nil)
+	http.ListenAndServe(s.config.Address, nil)
+	return nil
 }
 
-func New(config *Config) *Server {
+func New(cfg *config.Config, ctx context.Context, clock clockwork.Clock, sm statemachine.StateMachine) *Server {
 	s := Server{
-		config: config,
+		config:       cfg,
+		scheduler:    scheduler.New(ctx, clock),
+		statemachine: sm,
+		clock:        clock,
 	}
 	return &s
-}
-
-func main() {
-	cfg := Config{
-		BaseURL: "/B",
-		DataDir: "/home/user/non-critical/gopath/src/github.com/katzenpost/authority/server",
-		NetAddr: "127.0.0.1:8080",
-	}
-	s := New(&cfg)
-	s.Start()
 }

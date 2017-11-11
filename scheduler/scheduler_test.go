@@ -1,10 +1,10 @@
-package authority
+package scheduler
 
 import (
-	"testing"
-	"time"
 	"context"
 	"sync/atomic"
+	"testing"
+	"time"
 
 	"github.com/katzenpost/core/epochtime"
 
@@ -12,8 +12,8 @@ import (
 )
 
 type fakeStateMachine struct {
-	t *testing.T
-	calls uint32
+	t       *testing.T
+	calls   uint32
 	advance chan struct{}
 }
 
@@ -58,13 +58,13 @@ func TestSchedulerRun(t *testing.T) {
 		fsm.expect(false)
 		clock.Advance(tilExchange / 2)
 		fsm.expect(true)
-		clock.Advance((tilTabulate - tilExchange)/2)
+		clock.Advance((tilTabulate - tilExchange) / 2)
 		fsm.expect(false)
-		clock.Advance((tilTabulate - tilExchange)/2)
+		clock.Advance((tilTabulate - tilExchange) / 2)
 		fsm.expect(true)
-		clock.Advance((epochtime.Period - tilTabulate)/2)
+		clock.Advance((epochtime.Period - tilTabulate) / 2)
 		fsm.expect(false)
-		clock.Advance((epochtime.Period - tilTabulate)/2)
+		clock.Advance((epochtime.Period - tilTabulate) / 2)
 		fsm.expect(true)
 	}
 
@@ -72,4 +72,3 @@ func TestSchedulerRun(t *testing.T) {
 		t.Fatalf("expected 30 calls to Advance, got %d", fsm.calls)
 	}
 }
-
