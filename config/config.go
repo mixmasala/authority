@@ -41,6 +41,10 @@ type DirectoryDescriptor struct {
 
 // TomlConfig is the TOML configuration struct for the Directory Authority server instance
 type TomlConfig struct {
+	Authority Authority
+}
+
+type Authority struct {
 	// IdentityPrivateKey is the Directory Authority server's identity (signing) key.
 	IdentityPrivateKey string
 
@@ -91,11 +95,11 @@ func Load(b []byte) (*Config, error) {
 		return nil, err
 	}
 	cfg := new(Config)
-	cfg.Address = tomlCfg.Address
-	cfg.BaseURL = tomlCfg.BaseURL
-	cfg.DataDir = tomlCfg.DataDir
-	cfg.Peers = tomlCfg.Peers
-	raw, err := base64.StdEncoding.DecodeString(string(tomlCfg.IdentityPrivateKey))
+	cfg.Address = tomlCfg.Authority.Address
+	cfg.BaseURL = tomlCfg.Authority.BaseURL
+	cfg.DataDir = tomlCfg.Authority.DataDir
+	cfg.Peers = tomlCfg.Authority.Peers
+	raw, err := base64.StdEncoding.DecodeString(string(tomlCfg.Authority.IdentityPrivateKey))
 	if err != nil {
 		return nil, err
 	}

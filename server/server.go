@@ -107,9 +107,6 @@ func New(cfg *config.Config, ctx context.Context, clock clockwork.Clock) (*Serve
 		return nil, err
 	}
 	go s.scheduler.Run(s.statemachine)
-	err = s.httpserver.ListenAndServe()
-	if err != nil {
-		return nil, err
-	}
+	go s.httpserver.ListenAndServe()
 	return &s, nil
 }
