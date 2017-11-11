@@ -49,6 +49,7 @@ type Storage interface {
 // Server implements our Directory Authority mix network
 // consensus document service.
 type Server struct {
+	httpserver   *http.Server
 	config       *config.Config
 	scheduler    *scheduler.EpochScheduler
 	statemachine statemachine.StateMachine
@@ -78,27 +79,37 @@ func (s *Server) SignatureExchangeHandler() {
 	fmt.Println("signature exchange phase")
 }
 
-func (s *Server) Start() error {
+func (s *Server) Shutdown() error {
+	//ctx := context.TODO() // XXX fix me
+	//return s.httpserver.Shutdown(ctx)
+	return nil
+}
+
+func New(cfg *config.Config, ctx context.Context, clock clockwork.Clock) (*Server, error) {
 	var err error
+	handler := http.NewServeMux()
+	handler.HandleFunc(fmt.Sprintf("%s/upload/", cfg.BaseURL), uploadHandler)
+	handler.HandleFunc(fmt.Sprintf("%s/consensus/", cfg.BaseURL), consensusHandler)
+	httpserver := http.Server{
+		Handler: handler,
+		Addr:    cfg.Address,
+	}
+	s := Server{
+		httpserver: &httpserver,
+		config:     cfg,
+		scheduler:  scheduler.New(ctx, clock),
+		clock:      clock,
+	}
 	t := epochtime.New(s.clock)
 	_, elapsed, _ := t.Now()
 	s.statemachine, err = statemachine.New(elapsed, s.VoteExchangeHandler, s.SignatureExchangeHandler)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	go s.scheduler.Run(s.statemachine)
-	http.HandleFunc(fmt.Sprintf("%s/upload/", s.config.BaseURL), uploadHandler)
-	http.HandleFunc(fmt.Sprintf("%s/consensus/", s.config.BaseURL), consensusHandler)
-	http.ListenAndServe(s.config.Address, nil)
-	return nil
-}
-
-func New(cfg *config.Config, ctx context.Context, clock clockwork.Clock, sm statemachine.StateMachine) *Server {
-	s := Server{
-		config:       cfg,
-		scheduler:    scheduler.New(ctx, clock),
-		statemachine: sm,
-		clock:        clock,
+	err = s.httpserver.ListenAndServe()
+	if err != nil {
+		return nil, err
 	}
-	return &s
+	return &s, nil
 }

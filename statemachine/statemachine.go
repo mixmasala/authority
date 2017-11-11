@@ -70,6 +70,7 @@ func (s *SimpleStateMachine) Advance() {
 	}
 }
 
+// New returns a new SimpleStateMachine or an error
 func New(elapsed time.Duration, voteHandler func(), signatureHandler func()) (*SimpleStateMachine, error) {
 	if elapsed > constants.EpochDuration {
 		return nil, errors.New("elapsed time cannot exceed epoch duration")

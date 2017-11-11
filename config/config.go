@@ -19,6 +19,7 @@ package config
 
 import (
 	"encoding/base64"
+	"io/ioutil"
 
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/pelletier/go-toml"
@@ -83,6 +84,7 @@ type Config struct {
 	Peers []DirectoryDescriptor
 }
 
+// Load loads a configuration from a byte slice
 func Load(b []byte) (*Config, error) {
 	tomlCfg := new(TomlConfig)
 	if err := toml.Unmarshal(b, tomlCfg); err != nil {
@@ -103,4 +105,14 @@ func Load(b []byte) (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// LoadFile loads, parses and validates the provided file and returns the
+// Config.
+func LoadFile(f string) (*Config, error) {
+	b, err := ioutil.ReadFile(f)
+	if err != nil {
+		return nil, err
+	}
+	return Load(b)
 }
