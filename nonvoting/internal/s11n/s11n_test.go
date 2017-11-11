@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package nonvoting
+package s11n
 
 import (
 	"crypto/rand"
@@ -34,8 +34,8 @@ func TestDescriptor(t *testing.T) {
 	require := require.New(t)
 
 	d := new(pki.MixDescriptor)
-	err := isDescriptorWellFormed(d, debugTestEpoch)
-	assert.Error(err, "isDescriptorWellFormed(bad)")
+	err := IsDescriptorWellFormed(d, debugTestEpoch)
+	assert.Error(err, "IsDescriptorWellFormed(bad)")
 
 	// Build a well formed descriptor.
 	d.Name = "hydra-dominatus.example.net"
@@ -54,20 +54,20 @@ func TestDescriptor(t *testing.T) {
 		require.NoError(err, "[%d]: ecdh.NewKeypair()", e)
 		d.MixKeys[uint64(e)] = mPriv.PublicKey()
 	}
-	err = isDescriptorWellFormed(d, debugTestEpoch)
-	require.NoError(err, "isDescriptorWellFormed(good)")
+	err = IsDescriptorWellFormed(d, debugTestEpoch)
+	require.NoError(err, "IsDescriptorWellFormed(good)")
 
 	t.Logf("Descriptor: '%v'", d)
 
 	// Sign the descriptor.
-	signed, err := signDescriptor(identityPriv, d)
-	require.NoError(err, "signDescriptor()")
+	signed, err := SignDescriptor(identityPriv, d)
+	require.NoError(err, "SignDescriptor()")
 
 	t.Logf("signed descriptor: '%v'", signed)
 
 	// Verify and deserialize the signed descriptor.
-	dd, err := verifyAndParseDescriptor([]byte(signed), debugTestEpoch)
-	require.NoError(err, "verifyAndParseDescriptor()")
+	dd, err := VerifyAndParseDescriptor([]byte(signed), debugTestEpoch)
+	require.NoError(err, "VerifyAndParseDescriptor()")
 
 	t.Logf("Deserialized descriptor: '%v'", dd)
 

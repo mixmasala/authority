@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package nonvoting
+// Package s11n implements serialization routines for the various PKI
+// data structures.
+package s11n
 
 import (
 	"bytes"
@@ -40,7 +42,9 @@ type nodeDescriptor struct {
 	pki.MixDescriptor
 }
 
-func signDescriptor(signingKey *eddsa.PrivateKey, base *pki.MixDescriptor) (string, error) {
+// SignDescriptor signs and serializes the descriptor with the provided signing
+// key.
+func SignDescriptor(signingKey *eddsa.PrivateKey, base *pki.MixDescriptor) (string, error) {
 	d := new(nodeDescriptor)
 	d.MixDescriptor = *base
 	d.Version = nodeDescriptorVersion
@@ -69,7 +73,11 @@ func signDescriptor(signingKey *eddsa.PrivateKey, base *pki.MixDescriptor) (stri
 	return signed.CompactSerialize()
 }
 
-func verifyAndParseDescriptor(b []byte, epoch uint64) (*pki.MixDescriptor, error) {
+// VerifyAndParseDescriptor verifies the signature and deserializes the
+// descriptor.  MixDescriptors returned from this routine are guaranteed
+// to have been correctly self signed by the IdentityKey listed in the
+// MixDescriptor.
+func VerifyAndParseDescriptor(b []byte, epoch uint64) (*pki.MixDescriptor, error) {
 	signed, err := jose.ParseSigned(string(b))
 	if err != nil {
 		return nil, err
@@ -115,17 +123,14 @@ func verifyAndParseDescriptor(b []byte, epoch uint64) (*pki.MixDescriptor, error
 	if d.Version != nodeDescriptorVersion {
 		return nil, fmt.Errorf("nonvoting: Invalid Descriptor Version: '%v'", d.Version)
 	}
-	if err = isDescriptorWellFormed(&d.MixDescriptor, epoch); err != nil {
+	if err = IsDescriptorWellFormed(&d.MixDescriptor, epoch); err != nil {
 		return nil, err
 	}
 
 	// And as the final check, ensure that the key embedded in the descriptor
 	// matches the key we teased out of the payload, that we used to validate
 	// the signature.
-	//
-	// MixDescriptors returned from this function are essentially known to be
-	// "well formed", and correctly self-signed.
-	if !bytes.Equal(candidatePk.Bytes(), d.IdentityKey.Bytes()) {
+	if !candidatePk.Equal(d.IdentityKey) {
 		return nil, fmt.Errorf("nonvoting: Descriptor signing key mismatch")
 	}
 	return &d.MixDescriptor, nil
@@ -164,7 +169,10 @@ func extractSignedDescriptorPublicKey(b []byte) (*eddsa.PublicKey, error) {
 	return candidatePk, nil
 }
 
-func isDescriptorWellFormed(d *pki.MixDescriptor, epoch uint64) error {
+// IsDescriptorWellFormed validates the descriptor and returns a descriptive
+// error iff there are any problems that would make it unusable as part of
+// a PKI Document.
+func IsDescriptorWellFormed(d *pki.MixDescriptor, epoch uint64) error {
 	if d.Name == "" {
 		return fmt.Errorf("nonvoting: Descriptor missing Name")
 	}

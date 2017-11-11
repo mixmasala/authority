@@ -1,4 +1,4 @@
-// client.go - Katzenpost Non-voting authority client.
+// client.go - Katzenpost non-voting authority client.
 // Copyright (C) 2017  Yawning Angel.
 //
 // This program is free software: you can redistribute it and/or modify
@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package nonvoting
+// Package client implements the Katzenpost non-voting authority client.
+package client
 
 import (
 	"bytes"
@@ -24,6 +25,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/katzenpost/authority/nonvoting/internal/s11n"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/log"
 	"github.com/katzenpost/core/pki"
@@ -41,8 +43,8 @@ const (
 
 var httpClient = &http.Client{Timeout: clientTimeout}
 
-// ClientConfig is a nonvoting authority pki.Client instance.
-type ClientConfig struct {
+// Config is a nonvoting authority pki.Client instance.
+type Config struct {
 	// LogBackend is the `core/log` Backend instance to use for logging.
 	LogBackend *log.Backend
 
@@ -54,7 +56,7 @@ type ClientConfig struct {
 	PublicKey *eddsa.PublicKey
 }
 
-func (cfg *ClientConfig) validate() error {
+func (cfg *Config) validate() error {
 	if cfg.LogBackend == nil {
 		return fmt.Errorf("nonvoting/client: LogBackend is mandatory")
 	}
@@ -68,7 +70,7 @@ func (cfg *ClientConfig) validate() error {
 }
 
 type client struct {
-	cfg *ClientConfig
+	cfg *Config
 	log *logging.Logger
 }
 
@@ -76,12 +78,12 @@ func (c *client) Post(ctx context.Context, epoch uint64, signingKey *eddsa.Priva
 	c.log.Debugf("Post(ctx, %d, %v, %v)", epoch, signingKey.PublicKey(), d)
 
 	// Ensure that the descriptor we are about to post is well formed.
-	if err := isDescriptorWellFormed(d, epoch); err != nil {
+	if err := s11n.IsDescriptorWellFormed(d, epoch); err != nil {
 		return err
 	}
 
 	// Make a serialized + signed + serialized descriptor.
-	signed, err := signDescriptor(signingKey, d)
+	signed, err := s11n.SignDescriptor(signingKey, d)
 	if err != nil {
 		return err
 	}
@@ -126,14 +128,23 @@ func (c *client) Get(ctx context.Context, epoch uint64) (*pki.Document, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		// TODO: Likewise with Post() this should probably return an
+		// error indicating that the client should not retry fetching
+		// this document, based on the status code.
+		//
+		// Anything other than a 204 (No Content) or  500 (Internal Server Error)
+		// probably should indicate failure...
+		return nil, fmt.Errorf("nonvoting/Client: Get() fejected by authority: %v", resp.StatusCode)
+	}
 
-	// Validate the document.
+	// XXX: Validate the document.
 
 	return nil, fmt.Errorf("nonvoting/client: Get() is unimplemented")
 }
 
-// NewClient constructs a new pki.Client instance.
-func NewClient(cfg *ClientConfig) (pki.Client, error) {
+// New constructs a new pki.Client instance.
+func New(cfg *Config) (pki.Client, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("nonvoting/client: cfg is mandatory")
 	}
