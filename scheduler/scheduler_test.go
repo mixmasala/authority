@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/katzenpost/authority/constants"
 	"github.com/katzenpost/core/epochtime"
 
 	"github.com/jonboulle/clockwork"
@@ -45,7 +46,7 @@ func TestSchedulerRun(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sched := NewEpochScheduler(ctx, clock)
+	sched := New(ctx, clock)
 	fsm := &fakeStateMachine{t, 0, make(chan struct{})}
 
 	go sched.Run(fsm)
@@ -54,17 +55,17 @@ func TestSchedulerRun(t *testing.T) {
 
 	// run through some epochs
 	for i := 0; i < 10; i++ {
-		clock.Advance(tilExchange / 2)
+		clock.Advance(constants.TilExchange / 2)
 		fsm.expect(false)
-		clock.Advance(tilExchange / 2)
+		clock.Advance(constants.TilExchange / 2)
 		fsm.expect(true)
-		clock.Advance((tilTabulate - tilExchange) / 2)
+		clock.Advance((constants.TilTabulate - constants.TilExchange) / 2)
 		fsm.expect(false)
-		clock.Advance((tilTabulate - tilExchange) / 2)
+		clock.Advance((constants.TilTabulate - constants.TilExchange) / 2)
 		fsm.expect(true)
-		clock.Advance((epochtime.Period - tilTabulate) / 2)
+		clock.Advance((epochtime.Period - constants.TilTabulate) / 2)
 		fsm.expect(false)
-		clock.Advance((epochtime.Period - tilTabulate) / 2)
+		clock.Advance((epochtime.Period - constants.TilTabulate) / 2)
 		fsm.expect(true)
 	}
 
