@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/katzenpost/authority/nonvoting/internal/constants"
 	"github.com/katzenpost/authority/nonvoting/internal/s11n"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/log"
@@ -34,12 +35,7 @@ import (
 	"golang.org/x/net/context/ctxhttp"
 )
 
-const (
-	v0postBase    = "v0/post/"
-	v0getBase     = "v0/get/"
-	joseMimeType  = "application/jose"
-	clientTimeout = 30 * time.Second
-)
+const clientTimeout = 30 * time.Second
 
 var httpClient = &http.Client{Timeout: clientTimeout}
 
@@ -94,7 +90,7 @@ func (c *client) Post(ctx context.Context, epoch uint64, signingKey *eddsa.Priva
 	c.log.Debugf("Posting descriptor to: %v", u)
 
 	r := bytes.NewReader([]byte(signed))
-	resp, err := ctxhttp.Post(ctx, httpClient, u, joseMimeType, r)
+	resp, err := ctxhttp.Post(ctx, httpClient, u, constants.JoseMIMEType, r)
 	if err != nil {
 		return err
 	}
@@ -163,7 +159,7 @@ func postURLForEpoch(addr string, epoch uint64) string {
 	u := &url.URL{
 		Scheme: "http",
 		Host:   addr,
-		Path:   fmt.Sprintf("%v%v", v0postBase, epoch),
+		Path:   fmt.Sprintf("%v%v", constants.V0PostBase, epoch),
 	}
 	return u.String()
 }
@@ -172,7 +168,7 @@ func getURLForEpoch(addr string, epoch uint64) string {
 	u := &url.URL{
 		Scheme: "http",
 		Host:   addr,
-		Path:   fmt.Sprintf("%v%v", v0getBase, epoch),
+		Path:   fmt.Sprintf("%v%v", constants.V0GetBase, epoch),
 	}
 	return u.String()
 }
