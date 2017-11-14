@@ -152,7 +152,7 @@ func (s *Server) onV0Post(w http.ResponseWriter, req *http.Request) {
 
 	// Hand the descriptor off to the state worker.  As long as this returns
 	// a nil, the authority "accepts" the descriptor.
-	err = s.state.onDescriptorUpload(desc, descEpoch)
+	err = s.state.onDescriptorUpload(b, desc, descEpoch)
 	if err != nil {
 		// This is either a internal server error or the peer is trying to
 		// retroactively modify their descriptor.  This should disambituate
