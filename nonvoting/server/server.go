@@ -47,7 +47,7 @@ type Server struct {
 	logBackend *log.Backend
 	log        *logging.Logger
 
-	worker    *worker
+	state     *state
 	listeners []*http.Server
 
 	fatalErrCh chan error
@@ -131,10 +131,10 @@ func (s *Server) halt() {
 	// Wait for all the connections to terminate.
 	s.Wait()
 
-	// Halt the worker.
-	if s.worker != nil {
-		s.worker.halt()
-		s.worker = nil
+	// Halt the state worker.
+	if s.state != nil {
+		s.state.halt()
+		s.state = nil
 	}
 
 	s.identityKey.Reset()
@@ -193,8 +193,8 @@ func New(cfg *config.Config) (*Server, error) {
 		s.Shutdown()
 	}()
 
-	// Start up the worker.
-	s.worker = newWorker(s)
+	// Start up the state worker.
+	s.state = newState(s)
 
 	// Start up the listeners.
 	for _, v := range s.cfg.Authority.Addresses {

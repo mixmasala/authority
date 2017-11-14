@@ -72,7 +72,7 @@ func (s *Server) onV0Get(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Look up the document for the requested epoch.
-	doc, err := s.worker.documentForEpoch(epoch)
+	doc, err := s.state.documentForEpoch(epoch)
 	if err != nil {
 		s.logInvalidRequest(req, err)
 		switch err {
@@ -144,15 +144,15 @@ func (s *Server) onV0Post(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Ensure that the descriptor is from an allowed peer.
-	if !s.worker.isDescriptorAuthorized(desc) {
+	if !s.state.isDescriptorAuthorized(desc) {
 		s.logInvalidRequest(req, fmt.Errorf("identity key '%v' not authorized", desc.IdentityKey))
 		http.Error(w, "public key not recognized", http.StatusForbidden)
 		return
 	}
 
-	// Hand the descriptor off to the worker.  As long as this returns a nil,
-	// the worker "accepts" the descriptor.
-	err = s.worker.onDescriptorUpload(desc, descEpoch)
+	// Hand the descriptor off to the state worker.  As long as this returns
+	// a nil, the authority "accepts" the descriptor.
+	err = s.state.onDescriptorUpload(desc, descEpoch)
 	if err != nil {
 		// This is either a internal server error or the peer is trying to
 		// retroactively modify their descriptor.  This should disambituate

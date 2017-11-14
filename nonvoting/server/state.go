@@ -1,4 +1,4 @@
-// worker.go - Katzenpost non-voting authority server worker.
+// state.go - Katzenpost non-voting authority server state.
 // Copyright (C) 2017  Yawning Angel.
 //
 // This program is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ var (
 	errNotYet = errors.New("authority: Document is not ready yet")
 )
 
-type worker struct {
+type state struct {
 	sync.WaitGroup
 	sync.RWMutex
 
@@ -44,37 +44,37 @@ type worker struct {
 	haltCh chan interface{}
 }
 
-func (w *worker) halt() {
-	close(w.haltCh)
-	w.Wait()
+func (s *state) halt() {
+	close(s.haltCh)
+	s.Wait()
 
 	// XXX: Persist the state to disk.
 }
 
-func (w *worker) doWork() {
+func (s *state) worker() {
 	defer func() {
-		w.log.Debugf("Halting worker.")
-		w.Done()
+		s.log.Debugf("Halting worker.")
+		s.Done()
 	}()
 
 	for {
 		select {
-		case <-w.haltCh:
-			w.log.Debugf("Termianting gracefully.")
+		case <-s.haltCh:
+			s.log.Debugf("Termianting gracefully.")
 			return
 		}
 	}
 }
 
-func (w *worker) isDescriptorAuthorized(desc *pki.MixDescriptor) bool {
+func (s *state) isDescriptorAuthorized(desc *pki.MixDescriptor) bool {
 	var tmp [eddsa.PublicKeySize]byte
 	copy(tmp[:], desc.IdentityKey.Bytes())
 
 	switch desc.Layer {
 	case 0:
-		return w.authorizedMixes[tmp]
+		return s.authorizedMixes[tmp]
 	case pki.LayerProvider:
-		name, ok := w.authorizedProviders[tmp]
+		name, ok := s.authorizedProviders[tmp]
 		if !ok {
 			return false
 		}
@@ -84,39 +84,39 @@ func (w *worker) isDescriptorAuthorized(desc *pki.MixDescriptor) bool {
 	}
 }
 
-func (w *worker) onDescriptorUpload(desc *pki.MixDescriptor, epoch uint64) error {
+func (s *state) onDescriptorUpload(desc *pki.MixDescriptor, epoch uint64) error {
 	// XXX: Write me.
-	return nil
+	return fmt.Errorf("state: not implemented yet")
 }
 
-func (w *worker) documentForEpoch(epoch uint64) ([]byte, error) {
+func (s *state) documentForEpoch(epoch uint64) ([]byte, error) {
 	// XXX: Write me.
-	return nil, fmt.Errorf("worker: not implemented yet")
+	return nil, fmt.Errorf("state: not implemented yet")
 }
 
-func newWorker(s *Server) *worker {
-	w := new(worker)
-	w.s = s
-	w.log = s.logBackend.GetLogger("worker")
-	w.haltCh = make(chan interface{})
+func newState(s *Server) *state {
+	st := new(state)
+	st.s = s
+	st.log = s.logBackend.GetLogger("state")
+	st.haltCh = make(chan interface{})
 
 	// Initialize the authorized peer tables.
-	w.authorizedMixes = make(map[[eddsa.PublicKeySize]byte]bool)
-	for _, v := range w.s.cfg.Mixes {
+	st.authorizedMixes = make(map[[eddsa.PublicKeySize]byte]bool)
+	for _, v := range st.s.cfg.Mixes {
 		var tmp [eddsa.PublicKeySize]byte
 		copy(tmp[:], v.IdentityKey.Bytes())
-		w.authorizedMixes[tmp] = true
+		st.authorizedMixes[tmp] = true
 	}
-	w.authorizedProviders = make(map[[eddsa.PublicKeySize]byte]string)
-	for _, v := range w.s.cfg.Mixes {
+	st.authorizedProviders = make(map[[eddsa.PublicKeySize]byte]string)
+	for _, v := range st.s.cfg.Mixes {
 		var tmp [eddsa.PublicKeySize]byte
 		copy(tmp[:], v.IdentityKey.Bytes())
-		w.authorizedProviders[tmp] = v.Identifier
+		st.authorizedProviders[tmp] = v.Identifier
 	}
 
 	// XXX: Initialize the persistence store and restore state.
 
-	w.Add(1)
-	go w.doWork()
-	return w
+	st.Add(1)
+	go st.worker()
+	return st
 }
