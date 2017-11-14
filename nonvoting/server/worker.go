@@ -17,12 +17,18 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/pki"
 	"github.com/op/go-logging"
+)
+
+var (
+	errGone   = errors.New("authority: Request is too far in the past")
+	errNotYet = errors.New("authority: Document is not ready yet")
 )
 
 type worker struct {
@@ -41,6 +47,8 @@ type worker struct {
 func (w *worker) halt() {
 	close(w.haltCh)
 	w.Wait()
+
+	// XXX: Persist the state to disk.
 }
 
 func (w *worker) doWork() {
@@ -105,6 +113,8 @@ func newWorker(s *Server) *worker {
 		copy(tmp[:], v.IdentityKey.Bytes())
 		w.authorizedProviders[tmp] = v.Identifier
 	}
+
+	// XXX: Initialize the persistence store and restore state.
 
 	w.Add(1)
 	go w.doWork()

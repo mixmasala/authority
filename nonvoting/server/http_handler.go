@@ -57,7 +57,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) onV0Get(w http.ResponseWriter, req *http.Request) {
-	// Validate the HTTP header, and extract the epoch.
+	// Validate the HTTP method, and extract the epoch.
 	if req.Method != http.MethodGet {
 		s.logInvalidRequest(req, nil)
 		http.Error(w, "invalid HTTP method for URL", http.StatusBadRequest)
@@ -74,7 +74,16 @@ func (s *Server) onV0Get(w http.ResponseWriter, req *http.Request) {
 	doc, err := s.worker.documentForEpoch(epoch)
 	if err != nil {
 		s.logInvalidRequest(req, err)
-		http.NotFound(w, req)
+		switch err {
+		case errGone:
+			http.Error(w, "requested epoch too far in the past", http.StatusGone)
+		case errNotYet:
+			http.Error(w, "document not ready yet", http.StatusInternalServerError)
+		default:
+			// No idea what epoch the client is asking for, their clock is
+			// probably way off.
+			http.NotFound(w, req)
+		}
 		return
 	}
 
@@ -147,7 +156,7 @@ func (s *Server) onV0Post(w http.ResponseWriter, req *http.Request) {
 		// retroactively modify their descriptor.  This should disambituate
 		// the condition, but the latter is more likely.
 		s.logInvalidRequest(req, err)
-		http.Error(w, "rejected, conflicting upload?", http.StatusBadRequest)
+		http.Error(w, "rejected, conflicting upload?", http.StatusConflict)
 		return
 	}
 

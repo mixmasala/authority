@@ -137,8 +137,6 @@ func (s *Server) halt() {
 		s.worker = nil
 	}
 
-	// XXX: Persist state to disk.
-
 	s.identityKey.Reset()
 	close(s.fatalErrCh)
 
@@ -194,8 +192,6 @@ func New(cfg *config.Config) (*Server, error) {
 		s.log.Warningf("Shutting down due to error: %v", err)
 		s.Shutdown()
 	}()
-
-	// XXX: Initialize the persistence store and restore state.
 
 	// Start up the worker.
 	s.worker = newWorker(s)

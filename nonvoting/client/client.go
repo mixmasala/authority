@@ -97,7 +97,7 @@ func (c *client) Post(ctx context.Context, epoch uint64, signingKey *eddsa.Priva
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
-	case http.StatusCreated, http.StatusAccepted, http.StatusNoContent, http.StatusNotModified:
+	case http.StatusAccepted:
 		return nil
 	default:
 		// TODO: The authority rejected the POST for some reason, the
@@ -129,8 +129,8 @@ func (c *client) Get(ctx context.Context, epoch uint64) (*pki.Document, error) {
 		// error indicating that the client should not retry fetching
 		// this document, based on the status code.
 		//
-		// Anything other than a 204 (No Content) or  500 (Internal Server Error)
-		// probably should indicate failure...
+		// Anything other than a 500 (Internal Server Error) probably should
+		// indicate failure...
 		return nil, fmt.Errorf("nonvoting/Client: Get() fejected by authority: %v", resp.StatusCode)
 	}
 
