@@ -43,6 +43,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer s.Done()
 
 	s.log.Debug("Peer %v: %v Request: '%v'", req.RemoteAddr, req.Method, req.URL)
+	setCacheControl(w) // Disable response caching by default.
 
 	// Figure out if this is a document download or a descriptor upload.
 	p := req.URL.Path
@@ -89,6 +90,7 @@ func (s *Server) onV0Get(w http.ResponseWriter, req *http.Request) {
 
 	// Serve the response.
 	s.log.Debugf("Peer: %v: Serving document for epoch %v.", req.RemoteAddr, epoch)
+	unsetCacheControl(w) // This can be cached.
 	w.Header().Set("Content-Type", constants.JoseMIMEType)
 	r := bytes.NewReader(doc)
 	http.ServeContent(w, req, "", time.Time{}, r)
@@ -168,4 +170,12 @@ func (s *Server) onV0Post(w http.ResponseWriter, req *http.Request) {
 func extractEpoch(s, prefix string) (uint64, error) {
 	es := strings.TrimPrefix(s, prefix)
 	return strconv.ParseUint(es, 10, 64)
+}
+
+func setCacheControl(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+}
+
+func unsetCacheControl(w http.ResponseWriter) {
+	w.Header().Del("Cache-Control")
 }
