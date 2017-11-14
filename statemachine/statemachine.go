@@ -82,7 +82,7 @@ func New(elapsed time.Duration, voteHandler func(), signatureHandler func()) (*S
 		s.State = StateWait
 		return &s, nil
 	}
-	if elapsed > constants.TilExchange {
+	if elapsed > constants.TilExchange && elapsed < constants.TilTabulate {
 		s.State = StateExchange
 		return &s, nil
 	}
