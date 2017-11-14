@@ -6,10 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/katzenpost/authority/constants"
 	"github.com/katzenpost/core/epochtime"
-
-	"github.com/jonboulle/clockwork"
 )
 
 type fakeStateMachine struct {
