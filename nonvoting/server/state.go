@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/katzenpost/core/crypto/eddsa"
+	"github.com/katzenpost/core/crypto/rand"
 	"github.com/katzenpost/core/epochtime"
 	"github.com/katzenpost/core/pki"
 	"github.com/op/go-logging"
@@ -52,7 +53,8 @@ type state struct {
 	documents   map[uint64][]byte
 	descriptors map[uint64]map[[eddsa.PublicKeySize]byte]*descriptor
 
-	haltCh chan interface{}
+	updateCh chan interface{}
+	haltCh   chan interface{}
 
 	bootstrapEpoch uint64
 }
@@ -64,8 +66,21 @@ func (s *state) halt() {
 	// XXX: Gracefully close the persistence store.
 }
 
+func (s *state) onUpdate() {
+	// Non-blocking write, multiple invocations are harmless, the channel is
+	// buffered, and there is a fallback timer.
+	select {
+	case s.updateCh <- true:
+	default:
+	}
+}
+
 func (s *state) worker() {
+	const wakeInterval = 60 * time.Second
+
+	t := time.NewTicker(wakeInterval)
 	defer func() {
+		t.Stop()
 		s.log.Debugf("Halting worker.")
 		s.Done()
 	}()
@@ -73,10 +88,112 @@ func (s *state) worker() {
 	for {
 		select {
 		case <-s.haltCh:
-			s.log.Debugf("Termianting gracefully.")
+			s.log.Debugf("Terminating gracefully.")
 			return
+		case <-s.updateCh:
+			s.log.Debugf("Wakeup due to descriptor upload.")
+		case <-t.C:
+			s.log.Debugf("Wakeup due to periodic timer.")
+		}
+
+		// Generate the document(s) if enough descriptors are uploaded.
+		s.onWakeup()
+	}
+}
+
+func (s *state) onWakeup() {
+	const publishDeadline = epochtime.Period - (3600 * time.Second)
+	epoch, _, till := epochtime.Now()
+
+	s.Lock()
+	defer s.Unlock()
+
+	// If we are doing a bootstrap, and we don't have a document, attempt
+	// to generate one for the current epoch regardless of the time.
+	if epoch == s.bootstrapEpoch && s.documents[epoch] == nil {
+		// The bootstrap phase will belatedly generate a document for
+		// the current epoch iff it receives descriptor uploads for *ALL*
+		// nodes it knows about (eg: Test setups).
+		nrBootstrapDescs := len(s.authorizedMixes) + len(s.authorizedProviders)
+		if m, ok := s.descriptors[epoch]; ok && len(m) == nrBootstrapDescs {
+			s.generateDocument(epoch)
 		}
 	}
+
+	// If it is past the descriptor upload period and we have yet to generate a
+	// document for the *next* epoch, generate one.
+	if till < publishDeadline && s.documents[epoch+1] == nil {
+		if m, ok := s.descriptors[epoch+1]; ok && s.hasEnoughDescriptors(m) {
+			s.generateDocument(epoch + 1)
+		}
+	}
+}
+
+func (s *state) hasEnoughDescriptors(m map[[eddsa.PublicKeySize]byte]*descriptor) bool {
+	// A Document will be generated iff there are at least:
+	//
+	//  * Debug.Layers * Debug.MinNodesPerLayer nodes.
+	//  * One provider.
+	//
+	// Otherwise, it's pointless to generate a unusable document.
+	nrProviders := 0
+	for _, v := range m {
+		if v.desc.Layer == pki.LayerProvider {
+			nrProviders++
+		}
+	}
+	nrNodes := len(m) - nrProviders
+
+	minNodes := s.s.cfg.Debug.Layers * s.s.cfg.Debug.MinNodesPerLayer
+	return nrProviders > 0 && nrNodes >= minNodes
+}
+
+func (s *state) generateDocument(epoch uint64) {
+	s.log.Noticef("Generating Document for epoch %v.", epoch)
+
+	// Carve out the descriptors between providers and nodes.
+	var providers []*pki.MixDescriptor
+	var nodes []*pki.MixDescriptor
+	for _, v := range s.descriptors[epoch] {
+		if v.desc.Layer == pki.LayerProvider {
+			providers = append(providers, v.desc)
+		} else {
+			nodes = append(nodes, v.desc)
+		}
+	}
+
+	// Assign nodes to layers.
+	//
+	// TODO: It would be better if the authority remembered the previous
+	// layers that all nodes were in and minimized movement.  A real
+	// authority will probably also want to load balance, enforce families,
+	// etc here.
+	//
+	// For now, just randomly assign all non-provider nodes to the layers,
+	// trying to keep the same amount of nodes per layer.
+	rng := rand.NewMath()
+	nodeIndexes := rng.Perm(len(nodes))
+	layeredNodes := make([][]*pki.MixDescriptor, s.s.cfg.Debug.Layers)
+	for i, l := 0, 0; i < len(nodes); i++ {
+		idx := nodeIndexes[i]
+		n := nodes[idx]
+		n.Layer = uint8(l) // Set each MixDescriptor's Layer now.
+		layeredNodes[l] = append(layeredNodes[l], n)
+		l++
+		l = l % len(layeredNodes)
+	}
+
+	// Build the Document.
+	doc := new(pki.Document)
+	doc.Epoch = epoch
+	doc.Topology = layeredNodes
+	doc.Providers = providers
+
+	s.log.Debugf("Document: %v", doc)
+
+	// Serialize and sign the Document.
+
+	// XXX: Persist the document to disk.
 }
 
 func (s *state) isDescriptorAuthorized(desc *pki.MixDescriptor) bool {
@@ -133,12 +250,10 @@ func (s *state) onDescriptorUpload(rawDesc []byte, desc *pki.MixDescriptor, epoc
 	d := new(descriptor)
 	d.desc = desc
 	d.raw = rawDesc
-	m[pk] = d // XXX: Persist d.raw to disk.
-
-	// XXX: Kick the worker.
+	m[pk] = d // XXX: Persist d.raw to disk (Raw to allow re-verifying signatures).
 
 	s.log.Debugf("Node %v: Sucessfully submitted descriptor for epoch %v.", desc.IdentityKey, epoch)
-
+	s.onUpdate()
 	return nil
 }
 
@@ -190,6 +305,7 @@ func newState(s *Server) *state {
 	st := new(state)
 	st.s = s
 	st.log = s.logBackend.GetLogger("state")
+	st.updateCh = make(chan interface{}, 1) // Buffered!
 	st.haltCh = make(chan interface{})
 
 	// Initialize the authorized peer tables.
