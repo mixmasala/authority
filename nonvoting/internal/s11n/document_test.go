@@ -79,14 +79,20 @@ func TestDocument(t *testing.T) {
 		idx++
 	}
 
+	t.Logf("Document: '%v'", doc)
+
 	// Serialize and sign.
 	signed, err := SignDocument(k, doc)
 	require.NoError(err, "SignDocument()")
 
 	t.Logf("signed document: '%v':", signed)
 
-	// TODO: Validate and deserialize.
+	// Validate and deserialize.
+	ddoc, err := VerifyAndParseDocument([]byte(signed), k.PublicKey(), debugTestEpoch)
+	require.NoError(err, "VerifyAndParseDocument()")
 
-	// TODO:Ensure the descriptors are sane.
+	t.Logf("Deserialized document: '%v'", ddoc)
+
+	// TODO: Ensure the descriptors are sane.
 	_ = assert
 }
