@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/katzenpost/authority/nonvoting/internal/s11n"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
 	"github.com/katzenpost/core/epochtime"
@@ -173,27 +174,36 @@ func (s *state) generateDocument(epoch uint64) {
 	// trying to keep the same amount of nodes per layer.
 	rng := rand.NewMath()
 	nodeIndexes := rng.Perm(len(nodes))
-	layeredNodes := make([][]*pki.MixDescriptor, s.s.cfg.Debug.Layers)
+	topology := make([][]*pki.MixDescriptor, s.s.cfg.Debug.Layers)
 	for i, l := 0, 0; i < len(nodes); i++ {
 		idx := nodeIndexes[i]
 		n := nodes[idx]
 		n.Layer = uint8(l) // Set each MixDescriptor's Layer now.
-		layeredNodes[l] = append(layeredNodes[l], n)
+		topology[l] = append(topology[l], n)
 		l++
-		l = l % len(layeredNodes)
+		l = l % len(topology)
 	}
 
 	// Build the Document.
-	doc := new(pki.Document)
-	doc.Epoch = epoch
-	doc.Topology = layeredNodes
-	doc.Providers = providers
+	doc := &pki.Document{
+		Epoch:     epoch,
+		Topology:  topology,
+		Providers: providers,
+	}
 
 	s.log.Debugf("Document: %v", doc)
 
 	// Serialize and sign the Document.
+	signed, err := s11n.SignDocument(s.s.identityKey, doc)
+	if err != nil {
+		// This should basically always succeed.
+		s.log.Errorf("Failed to sign document: %v", err)
+		s.s.fatalErrCh <- err
+	}
 
 	// XXX: Persist the document to disk.
+
+	s.documents[epoch] = []byte(signed)
 }
 
 func (s *state) isDescriptorAuthorized(desc *pki.MixDescriptor) bool {
