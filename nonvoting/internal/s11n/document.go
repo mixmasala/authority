@@ -17,13 +17,50 @@
 package s11n
 
 import (
-	"fmt"
+	"encoding/json"
 
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/pki"
+	"gopkg.in/square/go-jose.v2"
 )
+
+const documentVersion = "nonvoting-document-v0"
+
+type document struct {
+	// Version uniquely identifies the document format as being for the
+	// non-voting authority so that it can be rejected when unexpectedly
+	// received or if the version changes.
+	Version string
+
+	pki.Document
+}
 
 // SignDocument signs and serializes the document with the provided signing key.
 func SignDocument(signingKey *eddsa.PrivateKey, base *pki.Document) (string, error) {
-	return "", fmt.Errorf("s11n: not implemented yet")
+	d := new(document)
+	d.Document = *base
+	d.Version = documentVersion
+
+	// Serialize the document.
+	payload, err := json.Marshal(d)
+	if err != nil {
+		return "", err
+	}
+
+	// Sign the descriptor.
+	k := jose.SigningKey{
+		Algorithm: jose.EdDSA,
+		Key:       *signingKey.InternalPtr(),
+	}
+	signer, err := jose.NewSigner(k, nil)
+	if err != nil {
+		return "", err
+	}
+	signed, err := signer.Sign(payload)
+	if err != nil {
+		return "", err
+	}
+
+	// Serialize the key, descriptor and signature.
+	return signed.CompactSerialize()
 }

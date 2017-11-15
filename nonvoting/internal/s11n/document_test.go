@@ -83,8 +83,9 @@ func TestDocument(t *testing.T) {
 	signed, err := SignDocument(k, doc)
 	require.NoError(err, "SignDocument()")
 
+	t.Logf("signed document: '%v':", signed)
+
 	// TODO: Validate and deserialize.
-	_ = signed
 
 	// TODO:Ensure the descriptors are sane.
 	_ = assert
