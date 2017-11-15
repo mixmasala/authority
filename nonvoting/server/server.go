@@ -112,6 +112,11 @@ func (s *Server) initListener(addr string) (*http.Server, error) {
 	return l, l.ListenAndServe()
 }
 
+// IdentityKey returns the running Server's identity public key.
+func (s *Server) IdentityKey() *eddsa.PublicKey {
+	return s.identityKey.PublicKey()
+}
+
 // Shutdown cleanly shuts down a given Server instance.
 func (s *Server) Shutdown() {
 	s.haltOnce.Do(func() { s.halt() })
