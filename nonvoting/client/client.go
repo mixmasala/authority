@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
@@ -134,9 +135,19 @@ func (c *client) Get(ctx context.Context, epoch uint64) (*pki.Document, error) {
 		return nil, fmt.Errorf("nonvoting/Client: Get() fejected by authority: %v", resp.StatusCode)
 	}
 
-	// XXX: Validate the document.
+	// Read in the body.
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, fmt.Errorf("nonvoting/client: Get() is unimplemented")
+	// Validate the document.
+	doc, err := s11n.VerifyAndParseDocument(b, c.cfg.PublicKey, epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	return doc, nil
 }
 
 // New constructs a new pki.Client instance.
