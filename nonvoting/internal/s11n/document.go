@@ -97,10 +97,62 @@ func VerifyAndParseDocument(b []byte, publicKey *eddsa.PublicKey, epoch uint64) 
 	if d.Version != documentVersion {
 		return nil, fmt.Errorf("nonvoting: Invalid Document Version: '%v'", d.Version)
 	}
-	if d.Epoch != epoch {
-		return nil, fmt.Errorf("nonvoting: Invalid Document Epoch: '%v'", d.Epoch)
+	if err = IsDocumentWellFormed(&d.Document, epoch); err != nil {
+		return nil, err
 	}
-	// XXX: More checks for well-formedness.
+
+	// Fixup the Layer field in all the Topology MixDescriptors.
+	for layer, nodes := range d.Topology {
+		for _, desc := range nodes {
+			desc.Layer = uint8(layer)
+		}
+	}
 
 	return &d.Document, nil
+}
+
+// IsDocumentWellFormed validates the document and returns a descriptive error
+// iff there are any problems that invalidates the document.
+func IsDocumentWellFormed(d *pki.Document, epoch uint64) error {
+	if d.Epoch != epoch {
+		return fmt.Errorf("nonvoting: Invalid Document Epoch: '%v'", d.Epoch)
+	}
+
+	pks := make(map[[eddsa.PublicKeySize]byte]bool)
+	if len(d.Topology) == 0 {
+		return fmt.Errorf("nonvoting: Document contains no Topology")
+	}
+	for layer, nodes := range d.Topology {
+		if len(nodes) == 0 {
+			return fmt.Errorf("nonvoting: Document Topology layer %d contains no nodes", layer)
+		}
+		for _, desc := range nodes {
+			if err := IsDescriptorWellFormed(desc, epoch); err != nil {
+				return err
+			}
+			pk := desc.IdentityKey.ByteArray()
+			if _, ok := pks[pk]; ok {
+				return fmt.Errorf("nonvoting: Document contains multiple entries for %v", desc.IdentityKey)
+			}
+			pks[pk] = true
+		}
+	}
+	if len(d.Providers) == 0 {
+		return fmt.Errorf("nonvoting: Document contains no Providers")
+	}
+	for _, desc := range d.Providers {
+		if err := IsDescriptorWellFormed(desc, epoch); err != nil {
+			return err
+		}
+		if desc.Layer != pki.LayerProvider {
+			return fmt.Errorf("nonvoting: Document lists %v as a Provider with layer %v", desc.IdentityKey, desc.Layer)
+		}
+		pk := desc.IdentityKey.ByteArray()
+		if _, ok := pks[pk]; ok {
+			return fmt.Errorf("nonvoting: Document contains multiple entries for %v", desc.IdentityKey)
+		}
+		pks[pk] = true
+	}
+
+	return nil
 }
