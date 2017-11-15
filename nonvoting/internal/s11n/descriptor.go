@@ -1,4 +1,4 @@
-// s11n.go - Katzenpost Non-voting authority serialization routines.
+// descriptor.go - Katzenpost Non-voting authority descriptor s11n.
 // Copyright (C) 2017  Yawning Angel.
 //
 // This program is free software: you can redistribute it and/or modify

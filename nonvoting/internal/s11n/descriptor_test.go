@@ -1,4 +1,4 @@
-// s11n_test.go - Serialization tests.
+// descriptor_test.go - Descriptor s11n tests.
 // Copyright (C) 2017  Yawning Angel
 //
 // This program is free software: you can redistribute it and/or modify
