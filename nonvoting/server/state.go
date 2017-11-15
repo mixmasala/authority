@@ -178,7 +178,6 @@ func (s *state) generateDocument(epoch uint64) {
 	for i, l := 0, 0; i < len(nodes); i++ {
 		idx := nodeIndexes[i]
 		n := nodes[idx]
-		n.Layer = uint8(l) // Set each MixDescriptor's Layer now.
 		topology[l] = append(topology[l], n)
 		l++
 		l = l % len(topology)
