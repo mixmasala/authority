@@ -324,7 +324,7 @@ func newState(s *Server) *state {
 		st.authorizedMixes[pk] = true
 	}
 	st.authorizedProviders = make(map[[eddsa.PublicKeySize]byte]string)
-	for _, v := range st.s.cfg.Mixes {
+	for _, v := range st.s.cfg.Providers {
 		pk := v.IdentityKey.ByteArray()
 		st.authorizedProviders[pk] = v.Identifier
 	}
