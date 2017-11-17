@@ -144,6 +144,9 @@ func (pCfg *Parameters) applyDefaults() {
 
 // Debug is the authority debug configuration.
 type Debug struct {
+	// ForceIdentityKey specifies a hex encoded identity private key.
+	ForceIdentityKey string
+
 	// Layers is the number of non-provider layers in the network topology.
 	Layers int
 
@@ -172,7 +175,7 @@ func (dCfg *Debug) applyDefaults() {
 // Node is an authority mix node or provider entry.
 type Node struct {
 	// Identifier is the human readable node identifier, to be set iff
-	// the node is a Provider
+	// the node is a Provider.
 	Identifier string
 
 	// IdentityKey is the node's identity signing key.

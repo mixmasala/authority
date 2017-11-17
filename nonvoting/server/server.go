@@ -22,10 +22,12 @@
 package server
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,12 +111,18 @@ func (s *Server) initListener(addr string) (*http.Server, error) {
 	l.ReadTimeout = readTimeout
 	l.WriteTimeout = writeTimeout
 	l.ErrorLog = s.logBackend.GetGoLogger("httpd", "ERROR")
-	return l, l.ListenAndServe()
+	go l.ListenAndServe()
+	return l, nil
 }
 
 // IdentityKey returns the running Server's identity public key.
 func (s *Server) IdentityKey() *eddsa.PublicKey {
 	return s.identityKey.PublicKey()
+}
+
+// Wait waits till the server is terminated for any reason.
+func (s *Server) Wait() {
+	<-s.haltedCh
 }
 
 // Shutdown cleanly shuts down a given Server instance.
@@ -134,7 +142,7 @@ func (s *Server) halt() {
 	}
 
 	// Wait for all the connections to terminate.
-	s.Wait()
+	s.WaitGroup.Wait()
 
 	// Halt the state worker.
 	if s.state != nil {
@@ -172,11 +180,26 @@ func New(cfg *config.Config) (*Server, error) {
 
 	// Initialize the authority identity key.
 	var err error
-	identityPrivateKeyFile := filepath.Join(s.cfg.Authority.DataDir, "identity.private.pem")
-	identityPublicKeyFile := filepath.Join(s.cfg.Authority.DataDir, "identity.public.pem")
-	if s.identityKey, err = eddsa.Load(identityPrivateKeyFile, identityPublicKeyFile, rand.Reader); err != nil {
-		s.log.Errorf("Failed to initialize identity: %v", err)
-		return nil, err
+	if s.cfg.Debug.ForceIdentityKey != "" {
+		s.log.Warning("ForceIdentityKey should NOT be used for production deployments.")
+		keyStr := strings.TrimSpace(s.cfg.Debug.ForceIdentityKey)
+		raw, err := hex.DecodeString(keyStr)
+		if err != nil {
+			s.log.Errorf("Failed to parse forced identity: %v", err)
+			return nil, err
+		}
+		s.identityKey = new(eddsa.PrivateKey)
+		if err = s.identityKey.FromBytes(raw); err != nil {
+			s.log.Errorf("Failed to initialize identity: %v", err)
+			return nil, err
+		}
+	} else {
+		identityPrivateKeyFile := filepath.Join(s.cfg.Authority.DataDir, "identity.private.pem")
+		identityPublicKeyFile := filepath.Join(s.cfg.Authority.DataDir, "identity.public.pem")
+		if s.identityKey, err = eddsa.Load(identityPrivateKeyFile, identityPublicKeyFile, rand.Reader); err != nil {
+			s.log.Errorf("Failed to initialize identity: %v", err)
+			return nil, err
+		}
 	}
 	s.log.Noticef("Authority identity public key is: %s", s.identityKey.PublicKey())
 
