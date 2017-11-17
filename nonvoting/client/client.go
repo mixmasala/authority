@@ -132,7 +132,7 @@ func (c *client) Get(ctx context.Context, epoch uint64) (*pki.Document, error) {
 		//
 		// Anything other than a 500 (Internal Server Error) probably should
 		// indicate failure...
-		return nil, fmt.Errorf("nonvoting/Client: Get() fejected by authority: %v", resp.StatusCode)
+		return nil, fmt.Errorf("nonvoting/Client: Get() rejected by authority: %v", resp.StatusCode)
 	}
 
 	// Read in the body.
