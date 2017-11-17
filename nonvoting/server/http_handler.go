@@ -42,7 +42,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	s.Add(1)
 	defer s.Done()
 
-	s.log.Debug("Peer %v: %v Request: '%v'", req.RemoteAddr, req.Method, req.URL)
+	s.log.Debugf("Peer %v: %v Request: '%v'", req.RemoteAddr, req.Method, req.URL)
 	setCacheControl(w) // Disable response caching by default.
 
 	// Figure out if this is a document download or a descriptor upload.
@@ -163,7 +163,7 @@ func (s *Server) onV0Post(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Return a successful response.
-	s.log.Debugf("Peer %v: Accepted descriptor for epoch %v: '%v'", descEpoch, desc)
+	s.log.Debugf("Peer %v: Accepted descriptor for epoch %v: '%v'", req.RemoteAddr, descEpoch, desc)
 	http.Error(w, "", http.StatusAccepted)
 }
 
