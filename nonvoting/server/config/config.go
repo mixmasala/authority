@@ -212,17 +212,13 @@ type Config struct {
 	Providers []*Node
 }
 
-// Load parses and validates the provided buffer b as a config file body and
-// returns the Config.
-func Load(b []byte) (*Config, error) {
-	cfg := new(Config)
-	if err := toml.Unmarshal(b, cfg); err != nil {
-		return nil, err
-	}
-
+// FixupAndValidate applies defaults to config entries and validates the
+// supplied configuration.  Most people should call one of the Load variants
+// instead.
+func (cfg *Config) FixupAndValidate() error {
 	// Handle missing sections if possible.
 	if cfg.Authority == nil {
-		return nil, errors.New("config: No Authority block was present")
+		return errors.New("config: No Authority block was present")
 	}
 	if cfg.Logging == nil {
 		cfg.Logging = &defaultLogging
@@ -236,16 +232,16 @@ func Load(b []byte) (*Config, error) {
 
 	// Validate and fixup the various sections.
 	if err := cfg.Authority.validate(); err != nil {
-		return nil, err
+		return err
 	}
 	if err := cfg.Logging.validate(); err != nil {
-		return nil, err
+		return err
 	}
 	if err := cfg.Parameters.validate(); err != nil {
-		return nil, err
+		return err
 	}
 	if err := cfg.Debug.validate(); err != nil {
-		return nil, err
+		return err
 	}
 	cfg.Parameters.applyDefaults()
 	cfg.Debug.applyDefaults()
@@ -253,17 +249,17 @@ func Load(b []byte) (*Config, error) {
 	allNodes := make([]*Node, 0, len(cfg.Mixes)+len(cfg.Providers))
 	for _, v := range cfg.Mixes {
 		if err := v.validate(false); err != nil {
-			return nil, err
+			return err
 		}
 		allNodes = append(allNodes, v)
 	}
 	idMap := make(map[string]*Node)
 	for _, v := range cfg.Providers {
 		if err := v.validate(true); err != nil {
-			return nil, err
+			return err
 		}
 		if _, ok := idMap[v.Identifier]; ok {
-			return nil, fmt.Errorf("config: Providers: Identifier '%v' is present more than once", v.Identifier)
+			return fmt.Errorf("config: Providers: Identifier '%v' is present more than once", v.Identifier)
 		}
 		idMap[v.Identifier] = v
 		allNodes = append(allNodes, v)
@@ -273,7 +269,7 @@ func Load(b []byte) (*Config, error) {
 		var tmp [eddsa.PublicKeySize]byte
 		copy(tmp[:], v.IdentityKey.Bytes())
 		if _, ok := pkMap[tmp]; ok {
-			return nil, fmt.Errorf("config: Nodes: IdentityKey '%v' is present more than once", v.IdentityKey)
+			return fmt.Errorf("config: Nodes: IdentityKey '%v' is present more than once", v.IdentityKey)
 		}
 		pkMap[tmp] = v
 	}
@@ -281,10 +277,24 @@ func Load(b []byte) (*Config, error) {
 	// Ensure that there are enough mixes and providers whitelisted to form
 	// a topology, assuming all of them post a descriptor.
 	if len(cfg.Providers) < 1 {
-		return nil, fmt.Errorf("config: Providers: None are specified")
+		return fmt.Errorf("config: Providers: None are specified")
 	}
 	if len(cfg.Mixes) < cfg.Debug.Layers*cfg.Debug.MinNodesPerLayer {
-		return nil, fmt.Errorf("config: Mixes: Insufficient nodes whitelisted, got %v , need %v", len(cfg.Mixes), cfg.Debug.Layers*cfg.Debug.MinNodesPerLayer)
+		return fmt.Errorf("config: Mixes: Insufficient nodes whitelisted, got %v , need %v", len(cfg.Mixes), cfg.Debug.Layers*cfg.Debug.MinNodesPerLayer)
+	}
+
+	return nil
+}
+
+// Load parses and validates the provided buffer b as a config file body and
+// returns the Config.
+func Load(b []byte) (*Config, error) {
+	cfg := new(Config)
+	if err := toml.Unmarshal(b, cfg); err != nil {
+		return nil, err
+	}
+	if err := cfg.FixupAndValidate(); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil
