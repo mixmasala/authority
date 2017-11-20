@@ -153,6 +153,10 @@ type Debug struct {
 	// MinNodesPerLayer is the minimum number of nodes per layer required to
 	// form a valid Document.
 	MinNodesPerLayer int
+
+	// GenerateOnly halts and cleans up the server right after long term
+	// key generation.
+	GenerateOnly bool
 }
 
 func (dCfg *Debug) validate() error {
@@ -272,15 +276,6 @@ func (cfg *Config) FixupAndValidate() error {
 			return fmt.Errorf("config: Nodes: IdentityKey '%v' is present more than once", v.IdentityKey)
 		}
 		pkMap[tmp] = v
-	}
-
-	// Ensure that there are enough mixes and providers whitelisted to form
-	// a topology, assuming all of them post a descriptor.
-	if len(cfg.Providers) < 1 {
-		return fmt.Errorf("config: Providers: None are specified")
-	}
-	if len(cfg.Mixes) < cfg.Debug.Layers*cfg.Debug.MinNodesPerLayer {
-		return fmt.Errorf("config: Mixes: Insufficient nodes whitelisted, got %v , need %v", len(cfg.Mixes), cfg.Debug.Layers*cfg.Debug.MinNodesPerLayer)
 	}
 
 	return nil

@@ -23,6 +23,7 @@ package server
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -37,6 +38,10 @@ import (
 	"github.com/katzenpost/core/log"
 	"github.com/op/go-logging"
 )
+
+// ErrGenerateOnly is the error returned when the server initialization
+// terminates due to the `GenerateOnly` debug config option.
+var ErrGenerateOnly = errors.New("server: GenerateOnly set")
 
 // Server is a non-voting authority server instance.
 type Server struct {
@@ -202,6 +207,19 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 	}
 	s.log.Noticef("Authority identity public key is: %s", s.identityKey.PublicKey())
+
+	if s.cfg.Debug.GenerateOnly {
+		return nil, ErrGenerateOnly
+	}
+
+	// Ensure that there are enough mixes and providers whitelisted to form
+	// a topology, assuming all of them post a descriptor.
+	if len(cfg.Providers) < 1 {
+		return nil, fmt.Errorf("server: No Provdiders specified in the config")
+	}
+	if len(cfg.Mixes) < cfg.Debug.Layers*cfg.Debug.MinNodesPerLayer {
+		return nil, fmt.Errorf("server: Insufficient nodes whitelisted, got %v , need %v", len(cfg.Mixes), cfg.Debug.Layers*cfg.Debug.MinNodesPerLayer)
+	}
 
 	// Past this point, failures need to call s.Shutdown() to do cleanup.
 	isOk := false
