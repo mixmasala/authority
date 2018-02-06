@@ -26,6 +26,7 @@ import (
 	"github.com/katzenpost/core/pki"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/square/go-jose.v2"
 )
 
 func genDescriptor(require *require.Assertions, idx int, layer int) (*pki.MixDescriptor, []byte) {
@@ -90,13 +91,14 @@ func TestDocument(t *testing.T) {
 	t.Logf("Document: '%v'", doc)
 
 	// Serialize and sign.
-	signed, err := SignDocument(k, doc)
+	var peerSigs map[[eddsa.PublicKeySize]byte]*jose.Signature
+	signed, err := SignDocument(k, peerSigs, doc)
 	require.NoError(err, "SignDocument()")
 
 	t.Logf("signed document: '%v':", signed)
 
 	// Validate and deserialize.
-	ddoc, err := VerifyAndParseDocument([]byte(signed), k.PublicKey())
+	ddoc, _, err := VerifyAndParseDocument([]byte(signed), k.PublicKey())
 	require.NoError(err, "VerifyAndParseDocument()")
 	require.Equal(doc.Epoch, ddoc.Epoch, "VerifyAndParseDocument(): Epoch")
 	require.Equal(doc.Lambda, ddoc.Lambda, "VerifyAndParseDocument(): Lambda")
